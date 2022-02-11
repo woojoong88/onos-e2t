@@ -141,14 +141,14 @@ func (e *E2APServer) E2Setup(ctx context.Context, request *e2appducontents.E2Set
 
 	for smOid, sm := range plugins {
 		var ranFunctions []*prototypes.Any
-		serviceModels[string(smOid)] = &topoapi.ServiceModelInfo{
-			OID:          string(smOid),
-			RanFunctions: ranFunctions,
-		}
 		var ranFunctionIDs []uint32
 		for ranFunctionID, ranFunc := range *ranFuncs {
 			oid := e2smtypes.OID(ranFunc.OID)
 			if smOid == oid {
+				serviceModels[string(smOid)] = &topoapi.ServiceModelInfo{
+					OID:          string(smOid),
+					RanFunctions: ranFunctions,
+				}
 				ranFunctionIDs = append(ranFunctionIDs, uint32(ranFunctionID))
 				if setup, ok := sm.(modelregistry.E2Setup); ok {
 					onSetupRequest := &e2smtypes.OnSetupRequest{
@@ -165,9 +165,9 @@ func (e *E2APServer) E2Setup(ctx context.Context, request *e2appducontents.E2Set
 				}
 
 				rfAccepted[ranFunctionID] = ranFunc.Revision
+				serviceModels[string(smOid)].RanFunctionIDs = ranFunctionIDs
 			}
 		}
-		serviceModels[string(smOid)].RanFunctionIDs = ranFunctionIDs
 	}
 
 	mgmtConn := NewMgmtConn(createE2NodeURI(nodeIdentity), plmnID, nodeIdentity, e.serverConn, serviceModels, e2Cells, time.Now())
@@ -228,8 +228,20 @@ func (e *E2APServer) RICIndication(ctx context.Context, request *e2appducontents
 func (e *E2APServer) E2ConfigurationUpdate(ctx context.Context, request *e2appducontents.E2NodeConfigurationUpdate) (response *e2appducontents.E2NodeConfigurationUpdateAcknowledge, failure *e2appducontents.E2NodeConfigurationUpdateFailure, err error) {
 	log.Infof("Received E2 node configuration update request: %+v", request)
 	ie3 := request.GetProtocolIes().GetE2ApProtocolIes3()
+
+	ie33 := request.GetProtocolIes().GetE2ApProtocolIes33()
+	e2cList := make([]*e2appducontents.E2NodeComponentConfigUpdateItem, 0)
+	for _, ie := range ie33.GetValue().GetValue() {
+		e2c := e2appducontents.E2NodeComponentConfigUpdateItem{}
+		e2c.E2NodeComponentInterfaceType = ie.GetValue().GetE2NodeComponentInterfaceType()
+		e2c.E2NodeComponentId = ie.GetValue().GetE2NodeComponentId()
+		e2c.E2NodeComponentConfiguration = ie.GetValue().GetE2NodeComponentConfiguration()
+
+		e2cList = append(e2cList, &e2c)
+	}
+
 	if ie3 != nil {
-		nodeID, err := pdudecoder.ExtractE2NodeIdentity(ie3.GetValue())
+		nodeID, err := pdudecoder.ExtractE2NodeIdentity(ie3.GetValue(), e2cList)
 		if err != nil {
 			cause := e2appducontents.E2NodeConfigurationUpdateFailureIes_E2NodeConfigurationUpdateFailureIes1{
 				Id:          int32(v2.ProtocolIeIDCause),

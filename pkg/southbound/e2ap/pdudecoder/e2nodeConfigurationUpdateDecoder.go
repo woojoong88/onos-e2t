@@ -24,10 +24,6 @@ func DecodeE2nodeConfigurationUpdatePdu(e2apPdu *e2ap_pdu_descriptions.E2ApPdu) 
 	transactionID := e2ncu.GetInitiatingMessage().GetProtocolIes().GetE2ApProtocolIes49().GetValue().GetValue()
 
 	globalE2NodeID := e2ncu.GetInitiatingMessage().GetProtocolIes().GetE2ApProtocolIes3().GetValue()
-	nodeIdentity, err := ExtractE2NodeIdentity(globalE2NodeID)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 
 	e2nccual := make([]*types.E2NodeComponentConfigUpdateItem, 0)
 	list := e2ncu.GetInitiatingMessage().GetProtocolIes().GetE2ApProtocolIes33().GetValue().GetValue()
@@ -38,6 +34,11 @@ func DecodeE2nodeConfigurationUpdatePdu(e2apPdu *e2ap_pdu_descriptions.E2ApPdu) 
 		e2nccuai.E2NodeComponentConfiguration = *ie.GetValue().GetE2NodeComponentConfiguration()
 
 		e2nccual = append(e2nccual, &e2nccuai)
+	}
+
+	nodeIdentity, err := ExtractE2NodeIdentity(globalE2NodeID, e2nccual)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	return &transactionID, nodeIdentity, e2nccual, nil
